@@ -25,8 +25,8 @@ export async function signup(req, res) {
       return res.status(400).json({ message: "Email already exists, please use a diffrent one" });
     }
 
-    const idx = Math.floor(Math.random() * 100) + 1; // generate a num between 1-100
-    const randomAvatar = `https://avatar.iran.liara.run/public/${idx}.png`;
+    const seed = Math.random().toString(36).substring(2, 10);
+    const randomAvatar = `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}`;
 
     const newUser = await User.create({
       email,
@@ -145,6 +145,40 @@ export async function onboard(req, res) {
     res.status(200).json({ success: true, user: updatedUser });
   } catch (error) {
     console.error("Onboarding error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function updateProfile(req, res) {
+  try {
+    const userId = req.user._id;
+    const { fullName, bio, nativeLanguage, learningLanguage, location, profilePic } = req.body;
+
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (bio !== undefined) updateData.bio = bio;
+    if (nativeLanguage !== undefined) updateData.nativeLanguage = nativeLanguage;
+    if (learningLanguage !== undefined) updateData.learningLanguage = learningLanguage;
+    if (location !== undefined) updateData.location = location;
+    if (profilePic !== undefined) updateData.profilePic = profilePic;
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+    if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+    try {
+      await upsertStreamUser({
+        id: updatedUser._id.toString(),
+        name: updatedUser.fullName,
+        image: updatedUser.profilePic || "",
+      });
+    } catch (streamError) {
+      console.log("Error updating Stream user during profile update:", streamError.message);
+    }
+
+    res.status(200).json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error("Profile update error:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 }
